@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ahad Music Player | Matrix</title>
+<script src="https://unpkg.com/feather-icons"></script>
+
+<style>
+:root{
+--bg:#030b07;
+--card:rgba(5,15,10,.92);
+--green:#00ff9c;
+--dark:#02160c;
+--glow:0 0 20px rgba(0,255,156,.6);
+}
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family: "Courier New", monospace;
+}
+
+body{
+min-height:100vh;
+background:#000;
+display:flex;
+align-items:center;
+justify-content:center;
+color:#0f0;
+overflow:hidden;
+}
+
+/* MATRIX RAIN */
+canvas{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+z-index:-1;
+}
+
+/* CARD */
+.card{
+width:92%;
+max-width:420px;
+background:var(--card);
+border-radius:22px;
+padding:28px;
+border:1px solid rgba(0,255,156,.3);
+box-shadow:0 0 40px rgba(0,255,156,.2);
+text-align:center;
+animation:fade .8s ease;
+}
+
+@keyframes fade{
+from{opacity:0;transform:translateY(40px)}
+}
+
+h1{
+font-size:1.5rem;
+margin-bottom:20px;
+color:var(--green);
+text-shadow:var(--glow);
+letter-spacing:2px;
+}
+
+/* SEARCH */
+.search{
+display:flex;
+background:#020d08;
+border-radius:16px;
+padding:6px;
+border:1px solid rgba(0,255,156,.3);
+margin-bottom:20px;
+}
+.search input{
+flex:1;
+background:transparent;
+border:none;
+color:#0f0;
+padding:12px;
+outline:none;
+}
+.search button{
+width:46px;
+border:none;
+border-radius:12px;
+background:transparent;
+color:var(--green);
+cursor:pointer;
+}
+
+/* LOADER */
+.loader{
+display:none;
+width:42px;
+height:42px;
+border:3px solid #033;
+border-top:3px solid var(--green);
+border-radius:50%;
+animation:spin .7s linear infinite;
+margin:25px auto;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* PLAYER */
+.player{
+display:none;
+flex-direction:column;
+align-items:center;
+}
+
+.cover{
+width:220px;
+height:220px;
+border-radius:18px;
+object-fit:cover;
+box-shadow:0 0 30px rgba(0,255,156,.4);
+margin-bottom:16px;
+}
+
+.song h2{
+font-size:1.1rem;
+color:#0f0;
+}
+.song p{
+font-size:.85rem;
+opacity:.7;
+margin-bottom:16px;
+}
+
+/* PROGRESS */
+.progress-area{width:100%}
+.progress{
+width:100%;
+appearance:none;
+height:6px;
+background:#022;
+border-radius:4px;
+cursor:pointer;
+}
+.progress::-webkit-slider-thumb{
+appearance:none;
+width:14px;
+height:14px;
+background:var(--green);
+border-radius:50%;
+box-shadow:var(--glow);
+}
+
+.time{
+display:flex;
+justify-content:space-between;
+font-size:.7rem;
+opacity:.7;
+margin-top:6px;
+}
+
+/* CONTROLS */
+.controls{
+display:flex;
+gap:26px;
+margin:20px 0;
+}
+.controls button{
+background:none;
+border:none;
+color:#0f0;
+cursor:pointer;
+}
+
+.play{
+width:62px;
+height:62px;
+border-radius:50%;
+background:transparent;
+border:2px solid var(--green);
+display:flex;
+align-items:center;
+justify-content:center;
+box-shadow:var(--glow);
+}
+
+/* DOWNLOAD */
+.download{
+width:100%;
+padding:14px;
+border-radius:14px;
+border:1px solid var(--green);
+background:transparent;
+color:#0f0;
+font-weight:600;
+display:flex;
+gap:10px;
+justify-content:center;
+cursor:pointer;
+transition:.3s;
+}
+.download:hover{
+background:rgba(0,255,156,.1);
+box-shadow:var(--glow);
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="matrix"></canvas>
+
+<div class="card">
+<h1>AHAD MUSIC PLAYER</h1>
+
+<div class="search">
+<input id="q" placeholder="Search song or Spotify link">
+<button onclick="searchSong()"><i data-feather="search"></i></button>
+</div>
+
+<div class="loader" id="loader"></div>
+
+<div class="player" id="player">
+<audio id="audio"></audio>
+
+<img id="cover" class="cover">
+<div class="song">
+<h2 id="title">Title</h2>
+<p id="artist">Artist</p>
+</div>
+
+<div class="progress-area">
+<input type="range" id="progress" class="progress" value="0" min="0" max="100">
+<div class="time">
+<span id="current">0:00</span>
+<span id="total">0:00</span>
+</div>
+</div>
+
+<div class="controls">
+<button onclick="seek(-10)"><i data-feather="rotate-ccw"></i></button>
+<button class="play" onclick="togglePlay()"><i data-feather="play"></i></button>
+<button onclick="seek(10)"><i data-feather="rotate-cw"></i></button>
+</div>
+
+<button class="download" onclick="downloadMp3()">
+<i data-feather="download"></i> DOWNLOAD MP3
+</button>
+</div>
+</div>
+
+<script>
+feather.replace();
+
+/* MATRIX EFFECT */
+const c=document.getElementById("matrix");
+const ctx=c.getContext("2d");
+c.width=innerWidth;
+c.height=innerHeight;
+const letters="01アカサタナハマヤラワ";
+const font=16;
+const cols=c.width/font;
+const drops=Array(cols).fill(1);
+
+function draw(){
+ctx.fillStyle="rgba(0,0,0,.05)";
+ctx.fillRect(0,0,c.width,c.height);
+ctx.fillStyle="#0f0";
+ctx.font=font+"px monospace";
+for(let i=0;i<drops.length;i++){
+const t=letters[Math.floor(Math.random()*letters.length)];
+ctx.fillText(t,i*font,drops[i]*font);
+if(drops[i]*font>c.height&&Math.random()>0.975)drops[i]=0;
+drops[i]++;
+}
+}
+setInterval(draw,33);
+
+/* PLAYER LOGIC */
+const audio=document.getElementById("audio");
+const loader=document.getElementById("loader");
+const player=document.getElementById("player");
+const progress=document.getElementById("progress");
+const cur=document.getElementById("current");
+const tot=document.getElementById("total");
+
+let dlink="",fname="song";
+
+async function searchSong(){
+const q=document.getElementById("q").value.trim();
+if(!q)return;
+player.style.display="none";
+loader.style.display="block";
+try{
+const r=await fetch(`https://arslan-apis.vercel.app/download/spotidl?q=${encodeURIComponent(q)}`);
+const d=await r.json();
+if(!d.status)throw 0;
+
+cover.src=d.metadata.thumbnail;
+title.innerText=d.metadata.title;
+artist.innerText=d.metadata.artist;
+
+audio.src=d.download.url;
+dlink=d.download.url;
+fname=`${d.metadata.title} - ${d.metadata.artist}`;
+
+loader.style.display="none";
+player.style.display="flex";
+audio.play();
+}catch{
+alert("Song not found");
+loader.style.display="none";
+}
+}
+
+function togglePlay(){audio.paused?audio.play():audio.pause();}
+function seek(s){audio.currentTime+=s;}
+
+audio.onloadedmetadata=()=>tot.innerText=format(audio.duration);
+audio.ontimeupdate=()=>{
+progress.value=(audio.currentTime/audio.duration)*100;
+cur.innerText=format(audio.currentTime);
+}
+progress.oninput=()=>audio.currentTime=(progress.value/100)*audio.duration;
+
+function format(s){
+const m=Math.floor(s/60);
+const sec=Math.floor(s%60);
+return `${m}:${sec<10?"0"+sec:sec}`;
+}
+
+async function downloadMp3(){
+if(!dlink)return;
+window.open(dlink,"_blank");
+}
+</script>
+</body>
+</html>
